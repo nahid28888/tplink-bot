@@ -1,17 +1,13 @@
-from flask import Flask, request
 import telebot
 from telebot import types
 import requests
-import pymongo
+import sqlite3
+import os
 
 # ----------------- CONFIGURATION -----------------
 BOT_TOKEN = "8403826808:AAHqc79KJlurchIRb8uvS4nRUzrfYKnW3sU"
-ADMIN_ID = 5851941158  # আপনার Numeric Telegram ID দিন
+ADMIN_ID = 5851941158  # আপনার Telegram ID
 
-# MongoDB Connection String
-MONGO_URI = "mongodb+srv://mdnahid29999_db_user:jZgqOXhhYGN1djDp@cluster0.bwfhsne.mongodb.net/?appName=Cluster0"
-
-# Website Authorization Header
 BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNTQ3MzA4NjU0OTk0MmVmNWI5ZTRjMCIsImlhdCI6MTc5MDgzNjI0MywiZXhwIjoxNzkwOTIyNjQzfQ.LiTVHG4-xr76Zexf860HRI-Z7CIdO7kVV9_nyIqQbYk"
 
 HEADERS = {
@@ -23,51 +19,47 @@ HEADERS = {
 }
 
 ROUTER_MODELS = {
-    "ARCHER C50 AC1200": "69f6f383902893c1fe3a0672",
-    "TL-WR840N 300Mbps": "ADD_ITEM_ID_HERE",
-    "TL-WR844N 300Mbps": "ADD_ITEM_ID_HERE",
-    "ARCHER C20 AC750": "ADD_ITEM_ID_HERE"
+    "ARCHER C50 AC1200": "PASTE_ITEM_ID_HERE",
+    "ARCHER C20 AC750": "PASTE_ITEM_ID_HERE",
+    "TL-WR840N 300Mbps": "PASTE_ITEM_ID_HERE",
+    "TL-WR844N 300Mbps": "PASTE_ITEM_ID_HERE"
 }
 # --------------------------------------------------
 
 bot = telebot.TeleBot(BOT_TOKEN)
-app = Flask(__name__)
 
-# Database Setup
-mongo_client = pymongo.MongoClient(MONGO_URI)
-db = mongo_client["excelbd_bot_db"]
-users_col = db["users"]
+# SQLite Database Setup (সহজ ও ১০০% এরর-ফ্রি)
+def init_db():
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            name TEXT,
+            points INTEGER DEFAULT 0,
+            total_submits INTEGER DEFAULT 0
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
 
 user_states = {}
-
-@app.route("/", methods=["POST"])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return "OK", 200
-    return "Forbidden", 403
-
-@app.route("/", methods=["GET"])
-def index():
-    return "Bot Active on Vercel!", 200
 
 # Command: /start
 @bot.message_handler(commands=['start'])
 def start_command(message):
     chat_id = message.chat.id
-    name = message.from_user.first_name
+    name = message.from_user.first_name or "User"
     
-    # Save user to DB
-    user = users_col.find_one({"user_id": chat_id})
-    if not user:
-        users_col.insert_one({
-            "user_id": chat_id,
-            "name": name,
-            "points": 0,
-            "total_submits": 0
-        })
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE user_id = ?", (chat_id,))
+    if not cursor.fetchone():
+        cursor.execute("INSERT INTO users (user_id, name, points, total_submits) VALUES (?, ?, 0, 0)", (chat_id, name))
+        conn.commit()
+    conn.close()
 
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     markup.add(
@@ -85,10 +77,16 @@ def start_command(message):
 # Balance Check
 @bot.message_handler(func=lambda msg: msg.text == "💰 My Balance")
 def my_balance(message):
-    user = users_col.find_one({"user_id": message.chat.id})
-    pts = user['points'] if user else 0
+    chat_id = message.chat.id
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT points FROM users WHERE user_id = ?", (chat_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    pts = row[0] if row else 0
     taka = pts * 10
-    bot.send_message(message.chat.id, f"💳 **আপনার বর্তমান ব্যালেন্স:**\n\nমোট পয়েন্ট: *{pts}*\nসমপরিমাণ টাকা: *{taka} BDT*", parse_mode="Markdown")
+    bot.send_message(chat_id, f"💳 **আপনার বর্তমান ব্যালেন্স:**\n\nমোট পয়েন্ট: *{pts}*\nসমপরিমাণ টাকা: *{taka} BDT*", parse_mode="Markdown")
 
 # Submit Router Process
 @bot.message_handler(func=lambda msg: msg.text == "📥 Submit Router")
@@ -136,10 +134,11 @@ def handle_photo(message):
             res = requests.post(target_url, headers=HEADERS, data=payload, files=files)
             
             if res.status_code in [200, 201]:
-                users_col.update_one(
-                    {"user_id": chat_id},
-                    {"$inc": {"points": 7, "total_submits": 1}}
-                )
+                conn = sqlite3.connect("database.db")
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET points = points + 7, total_submits = total_submits + 1 WHERE user_id = ?", (chat_id,))
+                conn.commit()
+                conn.close()
                 bot.send_message(chat_id, f"✅ **সফলভাবে সাবমিট হয়েছে!**\n\nSerial: `{serial}`\n+7 পয়েন্ট যোগ করা হয়েছে!", parse_mode="Markdown")
             else:
                 err_text = res.json().get('message', res.text) if res.headers.get('content-type') == 'application/json' else res.text
@@ -149,5 +148,22 @@ def handle_photo(message):
             
         del user_states[chat_id]
 
+# Admin Panel
+@bot.message_handler(func=lambda msg: msg.text == "⚙️ Admin Panel" and msg.chat.id == ADMIN_ID)
+def admin_panel(message):
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM users")
+    total_users = cursor.fetchone()[0]
+    conn.close()
+    
+    bot.send_message(
+        ADMIN_ID, 
+        f"🛠 **Admin Dashboard**\n\n• মোট ইউজার: {total_users}",
+        parse_mode="Markdown"
+    )
+
 if __name__ == "__main__":
-    app.run()
+    print("🤖 Bot is starting on Render...")
+    bot.remove_webhook()
+    bot.infinity_polling()
