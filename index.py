@@ -5,8 +5,8 @@ import requests
 import pymongo
 
 # ----------------- CONFIGURATION -----------------
-BOT_TOKEN = "8403826808:AAHqc79KJlurchIRb8uvS4nRUzrfYKnW3sU"  # BotFather থেকে পাওয়া টোকেন দিন
-ADMIN_ID = 5851941158  # আপনার Numeric Telegram ID (@userinfobot থেকে নেওয়া)
+BOT_TOKEN = "8403826808:AAHqc79KJlurchIRb8uvS4nRUzrfYKnW3sU"
+ADMIN_ID = 5851941158  # আপনার Numeric Telegram ID দিন
 
 # MongoDB Connection String
 MONGO_URI = "mongodb+srv://mdnahid29999_db_user:jZgqOXhhYGN1djDp@cluster0.bwfhsne.mongodb.net/?appName=Cluster0"
@@ -22,31 +22,11 @@ HEADERS = {
     'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36'
 }
 
-# TP-Linkসহ রাউটার মডেল তালিকা
 ROUTER_MODELS = {
-    "ARCHER C50 AC1200": "PASTE_ITEM_ID_HERE", # আপনার cURL থেকে প্রাপ্ত ID
-    "ARCHER C20 AC750": "PASTE_ITEM_ID_HERE",
-    "ARCHER C24 AC750": "PASTE_ITEM_ID_HERE",
-    "ARCHER C6 AC1200": "PASTE_ITEM_ID_HERE",
-    "ARCHER C60 AC1350": "PASTE_ITEM_ID_HERE",
-    "ARCHER C80 AC1900": "PASTE_ITEM_ID_HERE",
-    "ARCHER AX10 AX1500": "PASTE_ITEM_ID_HERE",
-    "ARCHER AX12 AX1500": "PASTE_ITEM_ID_HERE",
-    "ARCHER AX23 AX1800": "PASTE_ITEM_ID_HERE",
-    "ARCHER AX53 AX3000": "PASTE_ITEM_ID_HERE",
-
-    # TL-WR Series (N Series)
-    "TL-WR840N 300Mbps": "PASTE_ITEM_ID_HERE",
-    "TL-WR844N 300Mbps": "PASTE_ITEM_ID_HERE",
-    "TL-WR841N 300Mbps": "PASTE_ITEM_ID_HERE",
-    "TL-WR845N 300Mbps": "PASTE_ITEM_ID_HERE",
-    "TL-WR940N 450Mbps": "PASTE_ITEM_ID_HERE",
-
-    # Deco / Mesh Series
-    "DECO E4": "PASTE_ITEM_ID_HERE",
-    "DECO M4": "PASTE_ITEM_ID_HERE",
-    "DECO M5": "PASTE_ITEM_ID_HERE",
-    "DECO X20": "PASTE_ITEM_ID_HERE"
+    "ARCHER C50 AC1200": "69f6f383902893c1fe3a0672",
+    "TL-WR840N 300Mbps": "ADD_ITEM_ID_HERE",
+    "TL-WR844N 300Mbps": "ADD_ITEM_ID_HERE",
+    "ARCHER C20 AC750": "ADD_ITEM_ID_HERE"
 }
 # --------------------------------------------------
 
@@ -71,7 +51,7 @@ def webhook():
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Advanced Bot Active on Vercel!", 200
+    return "Bot Active on Vercel!", 200
 
 # Command: /start
 @bot.message_handler(commands=['start'])
@@ -79,7 +59,7 @@ def start_command(message):
     chat_id = message.chat.id
     name = message.from_user.first_name
     
-    # Save/Check User in MongoDB
+    # Save user to DB
     user = users_col.find_one({"user_id": chat_id})
     if not user:
         users_col.insert_one({
@@ -168,16 +148,6 @@ def handle_photo(message):
             bot.send_message(chat_id, f"⚠️ সিস্টেমে ত্রুটি: {str(e)}")
             
         del user_states[chat_id]
-
-# Admin Panel
-@bot.message_handler(func=lambda msg: msg.text == "⚙️ Admin Panel" and msg.chat.id == ADMIN_ID)
-def admin_panel(message):
-    total_users = users_col.count_documents({})
-    bot.send_message(
-        ADMIN_ID, 
-        f"🛠 **Admin Dashboard**\n\n• মোট ইউজার: {total_users}",
-        parse_mode="Markdown"
-    )
 
 if __name__ == "__main__":
     app.run()
